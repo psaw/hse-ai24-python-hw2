@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, Router, types
+from aiogram import Bot, Dispatcher, Router, types, BaseMiddleware
 from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from config import BOT_TOKEN, WEATHER_API_KEY, WORKOUT_CALORIES, logger
 from models import UserProfile
-from utils import get_temperature, get_food_info, generate_progress_charts
+from utils import get_temperature, get_food_info, generate_progress_charts, get_food_info_from_fs
 from datetime import datetime
 
 
@@ -30,9 +30,41 @@ users: dict[int, UserProfile] = {}
 
 router = Router()
 
+
+# Middleware для проверки наличия профиля пользователя
+class CheckUserProfileMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data: dict):
+        user_id = event.from_user.id
+        
+        # Список разрешенных команд без профиля
+        allowed_commands = ['/set_profile', '/start', '/help']
+        
+        # Пропускаем разрешенные команды и состояния заполнения профиля
+        if ((event.text and any(event.text.startswith(cmd) for cmd in allowed_commands)) or 
+            isinstance(data.get('state'), ProfileSetup) or
+            data.get('raw_state') is not None and data['raw_state'].startswith('ProfileSetup')):
+            return await handler(event, data)
+            
+        # Проверяем наличие профиля
+        if user_id not in users:
+            await event.answer("Сначала настройте профиль с помощью /set_profile")
+            return
+            
+        return await handler(event, data)
+
+
+# Middleware для логирования
+class LoggingMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data: dict):
+        logger.info(f"Сообщение от {event.from_user.id}: {event.text}")
+        return await handler(event, data)
+
+# Регистрируем middleware
+router.message.middleware(LoggingMiddleware())
+router.message.middleware(CheckUserProfileMiddleware()) 
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    logger.info(f"Команда /start от {message.from_user.id}")
     await message.answer(
         "Привет! Я помогу вам отслеживать потребление воды и калорий.\n"
         "Используйте следующие команды:\n"
@@ -43,10 +75,9 @@ async def cmd_start(message: Message):
         "/check_progress - проверить прогресс\n"
         "/charts - показать графики прогресса 📊"
     )
-
+    
 @router.message(Command("set_profile"))
 async def cmd_set_profile(message: Message, state: FSMContext):
-    logger.info(f"Команда /set_profile от {message.from_user.id}")
     await state.set_state(ProfileSetup.weight)
     await message.answer("Введите ваш вес (в кг):")
 
@@ -79,7 +110,7 @@ async def process_age(message: Message, state: FSMContext):
         await message.answer("Сколько минут активности у вас в день?")
     except ValueError:
         await message.answer("Пожалуйста, введите целое число. Попробуйте снова:")
-
+    
 @router.message(ProfileSetup.activity)
 async def process_activity(message: Message, state: FSMContext):
     try:
@@ -89,7 +120,7 @@ async def process_activity(message: Message, state: FSMContext):
         await message.answer("В каком городе вы находитесь?")
     except ValueError:
         await message.answer("Пожалуйста, введите целое число минут. Попробуйте снова:")
-
+    
 @router.message(ProfileSetup.city)
 async def process_city(message: Message, state: FSMContext):
     city = message.text
@@ -138,16 +169,12 @@ async def process_city(message: Message, state: FSMContext):
 
 @router.message(Command("log_water"))
 async def cmd_log_water(message: Message, command: CommandObject):
-    logger.info(f"Команда /log_water от {message.from_user.id}")
     if not command.args:
         await message.answer("Пожалуйста, укажите количество воды в мл. Например: /log_water 250")
         return
 
     user_id = message.from_user.id
-    if user_id not in users:
-        await message.answer("Сначала настройте профиль с помощью /set_profile")
-        return
-
+ 
     try:
         water_amount = float(command.args)
         users[user_id].logged_water += water_amount
@@ -161,7 +188,6 @@ async def cmd_log_water(message: Message, command: CommandObject):
 
 @router.message(Command("log_food"))
 async def cmd_log_food(message: Message, command: CommandObject, state: FSMContext):
-    logger.info(f"Команда /log_food от {message.from_user.id}")
     if not command.args:
         await message.answer(
             "Пожалуйста, укажите название продукта.\n"
@@ -170,11 +196,14 @@ async def cmd_log_food(message: Message, command: CommandObject, state: FSMConte
         return
 
     user_id = message.from_user.id
-    if user_id not in users:
-        await message.answer("Сначала настройте профиль с помощью /set_profile")
-        return
 
-    food_info = await get_food_info(command.args)
+    # обращение к OpenFoodFacts
+    # food_info = await get_food_info(command.args)
+
+    # обращение к FatSecret
+    food_info = await get_food_info_from_fs(command.args)
+
+
     if not food_info:
         logger.error("Не нашли продукт: {}".format(command.args))
         await message.answer(
@@ -182,7 +211,19 @@ async def cmd_log_food(message: Message, command: CommandObject, state: FSMConte
             "Попробуйте другой продукт или проверьте написание."
         )
         return
-
+    if food_info.get("error"):
+        if food_info.get("suggest"):
+            await message.answer(
+                f"Ошибка при получении информации о продукте: {food_info['name']}\n"
+                f"Попробуйте другой продукт или проверьте написание.\n"
+                f"*Внимание*: {food_info['suggest']}"
+            )
+        else:
+            await message.answer(
+                f"Ошибка при получении информации о продукте: {food_info['name']}\n"
+                "Попробуйте другой продукт или проверьте написание."
+            )
+        return
     try:
         await state.update_data(
             food_name=food_info["name"],
@@ -203,12 +244,7 @@ async def cmd_log_food(message: Message, command: CommandObject, state: FSMConte
 
 @router.message(Command("check_progress"))
 async def cmd_check_progress(message: Message):
-    logger.info(f"Команда /check_progress от {message.from_user.id}")
     user_id = message.from_user.id
-    if user_id not in users:
-        await message.answer("Сначала настройте профиль с помощью /set_profile")
-        return
-
     user = users[user_id]
     await message.answer(
         "📊 Прогресс:\n"
@@ -223,7 +259,6 @@ async def cmd_check_progress(message: Message):
 
 @router.message(Command("log_workout"))
 async def cmd_log_workout(message: Message, command: CommandObject):
-    logger.info(f"Команда /log_workout от {message.from_user.id}")
     if not command.args:
         await message.answer(
             "Пожалуйста, укажите тип тренировки и время в минутах.\n"
@@ -233,9 +268,6 @@ async def cmd_log_workout(message: Message, command: CommandObject):
         return
 
     user_id = message.from_user.id
-    if user_id not in users:
-        await message.answer("Сначала настройте профиль с помощью /set_profile")
-        return
 
     try:
         workout_type, duration = command.args.split()
@@ -294,12 +326,8 @@ async def process_food_weight(message: Message, state: FSMContext):
 @router.message(Command("charts"))
 async def cmd_charts(message: Message):
     """Отправляет графики прогресса пользователю"""
-    logger.info(f"Команда /charts от {message.from_user.id}")
     user_id = message.from_user.id
-    if user_id not in users:
-        await message.answer("Сначала настройте профиль с помощью /set_profile")
-        return
-    
+
     try:
         # Генерируем график
         buffer = await generate_progress_charts(users[user_id])
@@ -323,10 +351,6 @@ async def cmd_charts(message: Message):
     except Exception as e:
         print(f"Error generating charts: {e}")
         await message.answer("Извините, произошла ошибка при создании графиков.")
-
-@router.message()
-async def log_message(message: Message):
-    logger.info(f"Cообщение: {message.text} от {message.from_user.id}")
 
 # Запуск бота
 async def main():

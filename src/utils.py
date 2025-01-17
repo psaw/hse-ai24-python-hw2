@@ -5,7 +5,8 @@ import io
 from datetime import datetime, timedelta
 import numpy as np
 from models import UserProfile
-from config import logger, WEATHER_API_KEY
+from config import logger, WEATHER_API_KEY, CONSUMER_KEY, CONSUMER_SECRET
+from fatsecret import Fatsecret
 
 
 async def get_temperature(city: str, api_key: str) -> Optional[float]:
@@ -51,6 +52,106 @@ async def get_food_info(product_name: str) -> Optional[Dict]:
     except Exception as e:
         logger.error("Error getting food info: {}".format(e))
     return None
+
+
+async def get_food_info_from_fs(product_name: str) -> Optional[Dict]:
+    """
+    Получает информацию о продукте через FatSecret API
+    Args:
+        product_name: название продукта
+    Returns:
+        Dict с информацией о продукте или None в случае ошибки
+
+        Пример содержимого для coffee
+        serving = 
+        {
+            'calcium': '5',
+            'calories': '2', 
+            'carbohydrate': '0.09',
+            'cholesterol': '0',
+            'fat': '0.05',
+            'fiber': '0',
+            'iron': '0.05',
+            'measurement_description': 'mug (8 fl oz)',
+            'metric_serving_amount': '237.000',
+            'metric_serving_unit': 'g',
+            'monounsaturated_fat': '0.028',
+            'number_of_units': '1.000',
+            'polyunsaturated_fat': '0.002',
+            'potassium': '111',
+            'protein': '0.28',
+            'saturated_fat': '0.005',
+            'serving_description': '1 mug (8 fl oz)',
+            'serving_id': '27699',
+            'serving_url': 'https://www.fatsecret.com/calories-nutrition/generic/coffee?portionid=27699&portionamount=1.000',
+            'sodium': '5',
+            'sugar': '0',
+            'vitamin_a': '0',
+            'vitamin_c': '0.0'
+        }
+    """
+    try:
+        # Инициализация клиента FatSecret
+        fs = Fatsecret(CONSUMER_KEY, CONSUMER_SECRET)
+
+        # Поиск продукта. Только ПО-АНГЛИЙСКИЙ!
+        search_results = fs.foods_search(product_name) #, region="RU", language="ru") - только в платной версии
+
+        if not search_results:
+            logger.warning(f"Продукт не найден: {product_name}")
+            return None
+
+        # Берем первый результат поиска
+        food_id = search_results[0]['food_id']
+
+        # Получаем детальную информацию о продукте
+        food_details = fs.food_get_v2(food_id)
+
+        if not food_details or 'servings' not in food_details:
+            logger.warning(f"Нет информации о порциях для продукта: {product_name}")
+            return None
+
+        # Получаем информацию о порциях
+        servings = food_details['servings']['serving']
+        # Ищем порцию на 100г
+        serving_100g = None
+        if isinstance(servings, list):
+            for s in servings:
+                if (s.get('metric_serving_unit') == 'g' and 
+                    float(s.get('metric_serving_amount', 0)) == 100):
+                    serving_100g = s
+                    break
+        
+        # Если нашли порцию на 100г, используем её
+        if serving_100g:
+            serving = serving_100g
+            factor = 1
+        else:  # иначе берем первую порцию
+            serving = servings[0] if isinstance(servings, list) else servings
+            # Если порция в унциях, переводим в граммы (1 oz = 28.35 г)
+            if serving.get('metric_serving_unit') == 'oz':
+                metric_amount = float(serving.get('metric_serving_amount', 0)) * 28.35
+                serving['metric_serving_unit'] = 'г'
+            else:
+                metric_amount = float(serving.get('metric_serving_amount', 100))
+            # Если порция не на 100г, будем приводить к 100г
+            factor = 100 / metric_amount
+
+        # Формируем результат для 100г
+        return {
+            "name": food_details.get('food_name', product_name),
+            "calories": round(float(serving.get('calories', 0))*factor),  # ккал на 100г, округляем до целого
+            "protein": round(float(serving.get('protein', 0))*factor, 1),  # белки на 100г, .. до 1 знака
+            "fat": round(float(serving.get('fat', 0))*factor, 1),  # жиры на 100г, .. до 1 знака
+            "carbohydrate": round(float(serving.get('carbohydrate', 0))*factor, 1),  # углеводы на 100г, .. до 1 знака
+            "metric_serving_unit": serving.get('metric_serving_unit', 'г'),  # единица измерения
+        }
+    except KeyError as e:
+        logger.error("Ошибка при получении информации о продукте '{}' : {}".format(product_name, str(e)))
+        return {"error": str(e), "name": product_name, "suggest": "Используйте только английские названия продуктов"}
+    except Exception as e:
+        logger.error("Ошибка при получении информации о продукте '{}' : {}".format(product_name, str(e)))
+        return {"error": str(e), "name": product_name}
 
 
 async def generate_progress_charts(user_profile: UserProfile) -> io.BytesIO:

@@ -10,6 +10,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# FatSecret
+CONSUMER_KEY = os.getenv("CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")
+
 # Настройка логирования
 logger = logging.getLogger('fitness_bot')
 logger.setLevel(LOG_LEVEL)
