@@ -1,4 +1,5 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения из .env файла
@@ -9,8 +10,21 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# Настройка логирования
+logger = logging.getLogger('fitness_bot')
+logger.setLevel(LOG_LEVEL)
+
+# Создаем форматтер для логов
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Создаем обработчик для вывода в консоль
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
 # Проверяем наличие необходимых переменных
 if not all([BOT_TOKEN, WEATHER_API_KEY]):
+    logger.error("Отсутствуют необходимые переменные окружения")
     raise ValueError("Отсутствуют необходимые переменные окружения")
 
 # Константы для расчетов

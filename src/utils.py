@@ -5,6 +5,7 @@ import io
 from datetime import datetime, timedelta
 import numpy as np
 from models import UserProfile
+from config import logger, WEATHER_API_KEY
 
 
 async def get_temperature(city: str, api_key: str) -> Optional[float]:
@@ -16,6 +17,7 @@ async def get_temperature(city: str, api_key: str) -> Optional[float]:
             if response.status == 200:
                 data = await response.json()
                 return data["main"]["temp"]
+            logger.error("Ошибка при получении температуры: {}".format(response.status))
     return None
 
 
@@ -47,7 +49,7 @@ async def get_food_info(product_name: str) -> Optional[Dict]:
                                 "calories": float(calories)
                             }
     except Exception as e:
-        print(f"Error getting food info: {e}")
+        logger.error("Error getting food info: {}".format(e))
     return None
 
 
