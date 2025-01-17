@@ -1,13 +1,21 @@
 import asyncio
-from aiogram import Bot, Dispatcher, Router
+import logging
+from aiogram import Bot, Dispatcher, Router, types
+from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from config import BOT_TOKEN, WEATHER_API_KEY, WATER_PER_KG, WATER_PER_ACTIVITY, WATER_HOT_WEATHER, WORKOUT_CALORIES
+
+
+from config import BOT_TOKEN, WEATHER_API_KEY, WORKOUT_CALORIES, LOG_LEVEL
 from models import UserProfile
-from utils import get_temperature, get_food_info
+from utils import get_temperature, get_food_info, generate_progress_charts
 from datetime import datetime
+
+
+# Настройка логирования
+logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 # Состояния FSM для настройки профиля
 class ProfileSetup(StatesGroup):
@@ -28,18 +36,21 @@ router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
+    logging.info(f"Команда /start от {message.from_user.id}")
     await message.answer(
         "Привет! Я помогу вам отслеживать потребление воды и калорий.\n"
-        "Используйте /set_profile для настройки профиля.\n"
-        "Доступные команды:\n"
+        "Используйте следующие команды:\n"
+        "/set_profile - настроить профиль\n"
         "/log_water <мл> - записать выпитую воду\n"
         "/log_food <продукт> - записать съеденный продукт\n"
         "/log_workout <тип> <минуты> - записать тренировку\n"
-        "/check_progress - проверить прогресс"
+        "/check_progress - проверить прогресс\n"
+        "/charts - показать графики прогресса 📊"
     )
 
 @router.message(Command("set_profile"))
 async def cmd_set_profile(message: Message, state: FSMContext):
+    logging.info(f"Команда /set_profile от {message.from_user.id}")
     await state.set_state(ProfileSetup.weight)
     await message.answer("Введите ваш вес (в кг):")
 
@@ -118,7 +129,8 @@ async def process_city(message: Message, state: FSMContext):
             "/log_water <мл> - записать выпитую воду\n"
             "/log_food <продукт> - записать съеденный продукт\n"
             "/log_workout <тип> <минуты> - записать тренировку\n"
-            "/check_progress - проверить прогресс"
+            "/check_progress - проверить прогресс\n"
+            "/charts - показать графики прогресса 📊"
         )
     except Exception as e:
         await message.answer(
@@ -129,6 +141,7 @@ async def process_city(message: Message, state: FSMContext):
 
 @router.message(Command("log_water"))
 async def cmd_log_water(message: Message, command: CommandObject):
+    logging.info(f"Команда /log_water от {message.from_user.id}")
     if not command.args:
         await message.answer("Пожалуйста, укажите количество воды в мл. Например: /log_water 250")
         return
@@ -151,6 +164,7 @@ async def cmd_log_water(message: Message, command: CommandObject):
 
 @router.message(Command("log_food"))
 async def cmd_log_food(message: Message, command: CommandObject, state: FSMContext):
+    logging.info(f"Команда /log_food от {message.from_user.id}")
     if not command.args:
         await message.answer(
             "Пожалуйста, укажите название продукта.\n"
@@ -191,6 +205,7 @@ async def cmd_log_food(message: Message, command: CommandObject, state: FSMConte
 
 @router.message(Command("check_progress"))
 async def cmd_check_progress(message: Message):
+    logging.info(f"Команда /check_progress от {message.from_user.id}")
     user_id = message.from_user.id
     if user_id not in users:
         await message.answer("Сначала настройте профиль с помощью /set_profile")
@@ -210,6 +225,7 @@ async def cmd_check_progress(message: Message):
 
 @router.message(Command("log_workout"))
 async def cmd_log_workout(message: Message, command: CommandObject):
+    logging.info(f"Команда /log_workout от {message.from_user.id}")
     if not command.args:
         await message.answer(
             "Пожалуйста, укажите тип тренировки и время в минутах.\n"
@@ -277,13 +293,50 @@ async def process_food_weight(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Пожалуйста, введите вес в граммах числом.")
 
+@router.message(Command("charts"))
+async def cmd_charts(message: Message):
+    """Отправляет графики прогресса пользователю"""
+    logging.info(f"Команда /charts от {message.from_user.id}")
+    user_id = message.from_user.id
+    if user_id not in users:
+        await message.answer("Сначала настройте профиль с помощью /set_profile")
+        return
+    
+    try:
+        # Генерируем графики
+        buffer = await generate_progress_charts(users[user_id])
+        
+        # Создаем объект для отправки фото
+        photo = BufferedInputFile(
+            buffer.getvalue(),
+            filename="progress_charts.png"
+        )
+        
+        # Отправляем графики с подписью
+        await message.answer_photo(
+            photo,
+            caption=(
+                "📊 Ваш прогресс на сегодня:\n"
+                f"💧 Вода: {users[user_id].logged_water}/{users[user_id].water_goal} мл\n"
+                f"🔥 Калории: {users[user_id].logged_calories}/{users[user_id].calorie_goal} ккал\n"
+                f"💪 Сожжено: {users[user_id].burned_calories} ккал"
+            )
+        )
+    except Exception as e:
+        print(f"Error generating charts: {e}")
+        await message.answer("Извините, произошла ошибка при создании графиков.")
+
+@router.message()
+async def log_message(message: Message):
+    logging.info(f"Получено сообщение: {message.text} от {message.from_user.id}")
+
 # Запуск бота
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
     
-    print("Бот запущен!")
+    logging.info("Бот запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

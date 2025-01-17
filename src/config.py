@@ -7,6 +7,7 @@ load_dotenv()
 # Токены и ключи API
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Проверяем наличие необходимых переменных
 if not all([BOT_TOKEN, WEATHER_API_KEY]):
