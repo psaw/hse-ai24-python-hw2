@@ -5,7 +5,7 @@ Telegram-бот для отслеживания здоровья и фитнес
 ## Основные возможности
 
 - 💧 Отслеживание потребления воды
-- 🍎 Подсчет калорий 
+- 🍎 Подсчет калорий
 - 🏃‍♂️ Запись физических упражнений
 - 📊 Визуализация прогресса
 - 🌡️ Учет погодных условий при расчете нормы воды
@@ -118,3 +118,61 @@ python src/bot.py
 ## Лицензия
 
 MIT License - см. файл [LICENSE](LICENSE)
+
+
+# Deployment
+
+1. Make sure all files are in the correct structure:
+```sh
+.
+├── src/
+│ ├── bot.py
+│ ├── config.py
+│ ├── models.py
+│ └── utils.py
+├── .env
+├── .dockerignore
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── README.md
+```
+
+2. Create your `.env` file with the required environment variables:
+```env
+BOT_TOKEN=your_telegram_bot_token
+WEATHER_API_KEY=your_weather_api_key
+CONSUMER_KEY=your_fatsecret_consumer_key
+CONSUMER_SECRET=your_fatsecret_consumer_secret
+LOG_LEVEL=INFO
+```
+
+## Docker Deployment
+
+### Running with Docker Compose:
+1. Build and run with Docker Compose:
+```bash
+docker-compose up --build -d
+```
+
+2. View logs:
+```bash
+docker-compose logs -f
+```
+
+3. Stop the bot:
+```bash
+docker-compose down
+```
+
+### Running without Docker Compose:
+
+1. Build the image:
+```bash
+docker build -t fitness-bot .
+```
+
+2. Run the container:
+```bash
+docker run -d --name fitness_bot --restart unless-stopped fitness-bot
+```

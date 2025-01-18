@@ -1,0 +1,15 @@
+services:
+  bot:
+    build: .
+    container_name: fitness-bot
+    restart: unless-stopped
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    environment:
+      - TZ=UTC
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
