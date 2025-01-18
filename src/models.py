@@ -3,8 +3,9 @@ from datetime import datetime
 from typing import Dict, List
 from config import WATER_PER_KG, WATER_PER_ACTIVITY, WATER_HOT_WEATHER
 
+
 @dataclass
-class DailyStats:
+class DailyStats:  # pylint: disable=too-many-instance-attributes (R0902)
     date: str  # ISO format date string
     logged_water: float = 0
     logged_calories: float = 0
@@ -15,6 +16,7 @@ class DailyStats:
     food_log: List[Dict] = field(default_factory=list)
     workout_log: List[Dict] = field(default_factory=list)
 
+
 @dataclass
 class UserProfile:
     user_id: int
@@ -24,7 +26,7 @@ class UserProfile:
     activity_minutes: int = 0
     city: str = ""
     daily_stats: Dict[str, DailyStats] = field(default_factory=dict)
-    
+
     async def get_current_stats(self) -> DailyStats:
         """Gets or creates stats for current day"""
         today = datetime.now().date().isoformat()
@@ -32,9 +34,9 @@ class UserProfile:
             # Create new stats for the day
             self.daily_stats[today] = DailyStats(date=today)
             # Initialize goals for new day
-            from utils import get_temperature  # Import here to avoid circular dependencies
-            from config import WEATHER_API_KEY
-            
+            from utils import get_temperature  # pylint: disable=import-outside-toplevel (C0415)
+            from config import WEATHER_API_KEY  # pylint: disable=import-outside-toplevel (C0415)
+
             temp = await get_temperature(self.city, WEATHER_API_KEY)
             if temp is not None:
                 await self.update_daily_goals(temp)
@@ -44,9 +46,9 @@ class UserProfile:
                 stats.water_goal = self.calculate_water_goal(20)  # Use 20°C as base temperature
                 stats.calorie_goal = self.calculate_calorie_goal()
                 stats.temperature = 20
-        
+
         return self.daily_stats[today]
-    
+
     def calculate_water_goal(self, temperature: float) -> float:
         """Calculates daily water norm in ml"""
         base = self.weight * WATER_PER_KG  # base norm
