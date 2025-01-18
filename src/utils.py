@@ -4,15 +4,43 @@ import matplotlib.pyplot as plt
 import io
 from datetime import datetime, timedelta
 import numpy as np
-from models import UserProfile
+from models import DailyStats
 from config import logger, WEATHER_API_KEY, CONSUMER_KEY, CONSUMER_SECRET
 from fatsecret import Fatsecret
 
 
 async def get_temperature(city: str, api_key: str) -> Optional[float]:
-    """Получает температуру для города через OpenWeatherMap API"""
+    """Получает температуру для города через OpenWeatherMap API
+        Пример ответа для Moscow:
+            {
+                "coord": {"lon": 37.6156, "lat": 55.7522},
+                "weather": [{
+                    "id": 804,
+                    "main": "Clouds",
+                    "description": "overcast clouds", 
+                    "icon": "04n"
+                }],
+                "main": {
+                    "temp": 1.94,
+                    "feels_like": -3.23,
+                    "temp_min": 1.24,
+                    "temp_max": 2.04,
+                    "pressure": 1007,
+                    "humidity": 78
+                },
+                "wind": {"speed": 6.55, "deg": 315},
+                "rain": {"1h": 0.1},
+                "clouds": {"all": 97},
+                "sys": {
+                    "country": "RU",
+                    "sunrise": 1737179143,
+                    "sunset": 1737207226
+                },
+                "name": "Moscow",
+                "cod": 200
+            }
+    """
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-    
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status == 200:
@@ -154,7 +182,7 @@ async def get_food_info_from_fs(product_name: str) -> Optional[Dict]:
         return {"error": str(e), "name": product_name}
 
 
-async def generate_progress_charts(user_profile: UserProfile) -> io.BytesIO:
+async def generate_progress_charts(stats: DailyStats) -> io.BytesIO:
     """Генерирует графики прогресса по воде и калориям"""
     # Создаем фигуру с двумя подграфиками
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
@@ -164,7 +192,7 @@ async def generate_progress_charts(user_profile: UserProfile) -> io.BytesIO:
     colors = ['#2E86C1', '#3498DB']
     
     # График воды
-    water_data = [user_profile.logged_water, user_profile.water_goal]
+    water_data = [stats.logged_water, stats.water_goal]
     water_labels = ['Выпито', 'Цель']
     bars1 = ax1.bar(water_labels, water_data, color=colors)
     ax1.set_title('Прогресс по воде', pad=20, fontsize=14)
@@ -178,7 +206,7 @@ async def generate_progress_charts(user_profile: UserProfile) -> io.BytesIO:
                 ha='center', va='bottom')
     
     # График калорий
-    calorie_data = [user_profile.logged_calories, user_profile.burned_calories, user_profile.calorie_goal]
+    calorie_data = [stats.logged_calories, stats.burned_calories, stats.calorie_goal]
     calorie_labels = ['Потреблено', 'Сожжено', 'Цель']
     bars2 = ax2.bar(calorie_labels, calorie_data, color=colors + ['#2ECC71'])
     ax2.set_title('Прогресс по калориям', pad=20, fontsize=14)

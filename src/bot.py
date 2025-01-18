@@ -1,16 +1,13 @@
 import asyncio
-import logging
 from aiogram import Bot, Dispatcher, Router, types, BaseMiddleware
 from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
-
 from config import BOT_TOKEN, WATER_PER_WORKOUT, WEATHER_API_KEY, WORKOUT_CALORIES, logger
 from models import UserProfile
 from utils import get_temperature, get_food_info, generate_progress_charts, get_food_info_from_fs
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 # Состояния FSM для настройки профиля
@@ -35,6 +32,10 @@ class WorkoutLogging(StatesGroup):
     waiting_for_workout_type = State()
     waiting_for_workout_duration = State()
     commit_workout = State()
+
+# Состояние для выбора периода истории
+class HistoryPeriod(StatesGroup):
+    waiting_for_period = State()
 
 # Хранилище данных пользователей
 users: dict[int, UserProfile] = {}
@@ -79,13 +80,14 @@ async def cmd_start(message: Message):
     await message.answer(
         "Привет! Я помогу вам отслеживать потребление воды и калорий.\n"
         "Используйте следующие команды:\n"
-        "/set_profile - настроить профиль\n"
-        "/log_water <мл> - записать выпитую воду\n"
-        "/log_food <продукт> - записать съеденный продукт\n"
-        "/log_workout <тип> <минуты> - записать тренировку\n"
-        "/check_progress - проверить прогресс\n"
-        "/charts - показать графики прогресса 📊"
-    )
+        "/set_profile - настроить профиль 👤\n"
+        "/log_water <мл> - записать выпитую воду 💧\n"
+        "/log_food <продукт> - записать съеденный продукт 🍽\n"
+        "/log_workout <тип> <минуты> - записать тренировку 🏃‍♂️\n"
+        "/check_progress - проверить прогресс 🏁\n"
+        "/charts - показать графики прогресса 📊\n"
+        "/history - показать историю активности 📅"
+)
     
 @router.message(Command("set_profile"))
 async def cmd_set_profile(message: Message, state: FSMContext):
@@ -154,24 +156,28 @@ async def process_city(message: Message, state: FSMContext):
         if temp is None:
             raise ValueError("Не удалось получить температуру")
 
-        profile.water_goal = profile.calculate_water_goal(temp)
-        profile.calorie_goal = profile.calculate_calorie_goal()
+        # Сохраняем профиль до инициализации статистики
         users[user_id] = profile
+        
+        # Инициализируем статистику текущего дня
+        stats = await profile.get_current_stats()
         
         await state.clear()  # Очищаем состояние
         logger.info(f"Профиль настроен для пользователя {user_id}")
         await message.answer(
             "✅ Профиль настроен!\n"
-            f"💧 Норма воды: {profile.water_goal:.0f} мл\n"
-            f"🔥 Норма калорий: {profile.calorie_goal:.0f} ккал\n\n"
+            f"💧 Норма воды: {stats.water_goal:.0f} мл\n"
+            f"🔥 Норма калорий: {stats.calorie_goal:.0f} ккал\n\n"
             "Используйте следующие команды:\n"
             "/log_water <мл> - записать выпитую воду 💧\n"
             "/log_food <продукт> - записать съеденный продукт 🍽\n"
             "/log_workout <тип> <минуты> - записать тренировку 🏃‍♂️\n"
             "/check_progress - проверить прогресс 🏁\n"
-            "/charts - показать графики прогресса 📊"
+            "/charts - показать графики прогресса 📊\n"
+            "/history - показать историю активности 📅"
         )
     except Exception as e:
+        logger.error(f"Ошибка при настройке профиля: {e}")
         await message.answer(
             "❌ Не удалось получить данные о погоде.\n"
             "Пожалуйста, проверьте название города и попробуйте снова.\n"
@@ -187,15 +193,14 @@ async def cmd_log_water(message: Message, command: CommandObject, state: FSMCont
         return
 
     user_id = message.from_user.id
+    stats = await users[user_id].get_current_stats()
 
-    # при раздельном вводе команды и аргумента, объем воды все-равно
-    # будет в command.args - его направит обработчик состояния WaterLogging
     water_text = command.args
     logger.debug(f"water_text: {water_text}")
     try:
         water_amount = float(water_text)
-        users[user_id].logged_water += water_amount
-        remaining = users[user_id].water_goal - users[user_id].logged_water
+        stats.logged_water += water_amount
+        remaining = stats.water_goal - stats.logged_water
         await message.answer(
             f"✅ Записано: {water_amount} мл воды\n"
             f"💧 Осталось выпить: {max(0, remaining)} мл"
@@ -274,8 +279,9 @@ async def process_food_weight(message: Message, state: FSMContext):
         calories = food_data['calories_per_100'] * weight / 100
         
         user_id = message.from_user.id
-        users[user_id].logged_calories += calories
-        users[user_id].food_log.append({
+        stats = await users[user_id].get_current_stats()
+        stats.logged_calories += calories
+        stats.food_log.append({
             "name": food_data['food_name'],
             "weight": weight,
             "calories": calories,
@@ -357,6 +363,7 @@ async def cmd_log_workout(message: Message, command: CommandObject, state: FSMCo
         return
 
     user_id = message.from_user.id
+    stats = await users[user_id].get_current_stats()
     workout_type = state_data['workout_type']
     workout_duration = state_data['workout_duration']
 
@@ -364,8 +371,8 @@ async def cmd_log_workout(message: Message, command: CommandObject, state: FSMCo
         calories_burned = WORKOUT_CALORIES[workout_type] * workout_duration
         water_needed = (workout_duration // 30) * WATER_PER_WORKOUT  # 200мл воды каждые 30 минут
         
-        users[user_id].burned_calories += calories_burned
-        users[user_id].workout_log.append({
+        stats.burned_calories += calories_burned
+        stats.workout_log.append({
             "type": workout_type,
             "duration": workout_duration,
             "calories": calories_burned,
@@ -387,15 +394,30 @@ async def cmd_log_workout(message: Message, command: CommandObject, state: FSMCo
 async def cmd_check_progress(message: Message):
     user_id = message.from_user.id
     user = users[user_id]
+    stats = await user.get_current_stats()
+    
+    # Обновляем цели на текущий день
+    temp = await get_temperature(user.city, WEATHER_API_KEY)
+    if temp is not None:
+        await user.update_daily_goals(temp)
+        
+        # Если температура сильно изменилась, даем рекомендацию
+        if abs(temp - stats.temperature) > 5:
+            temp_diff = "повысилась" if temp > stats.temperature else "понизилась"
+            await message.answer(
+                f"🌡 Температура {temp_diff}!\n"
+                f"Новая рекомендация по воде: {stats.water_goal} мл"
+            )
+    
     await message.answer(
-        "📊 Прогресс:\n"
+        "📊 Прогресс на сегодня:\n"
         f"Вода:\n"
-        f"- Выпито: {user.logged_water} мл из {user.water_goal} мл.\n"
-        f"- Осталось: {max(0, user.water_goal - user.logged_water)} мл.\n\n"
+        f"- Выпито: {stats.logged_water} мл из {stats.water_goal} мл.\n"
+        f"- Осталось: {max(0, stats.water_goal - stats.logged_water)} мл.\n\n"
         f"Калории:\n"
-        f"- Потреблено: {user.logged_calories} ккал из {user.calorie_goal} ккал.\n"
-        f"- Сожжено: {user.burned_calories} ккал.\n"
-        f"- Баланс: {user.logged_calories - user.burned_calories} ккал."
+        f"- Потреблено: {stats.logged_calories} ккал из {stats.calorie_goal} ккал.\n"
+        f"- Сожжено: {stats.burned_calories} ккал.\n"
+        f"- Баланс: {stats.logged_calories - stats.burned_calories} ккал."
     )
 
 
@@ -403,10 +425,11 @@ async def cmd_check_progress(message: Message):
 async def cmd_charts(message: Message):
     """Отправляет графики прогресса пользователю"""
     user_id = message.from_user.id
+    stats = await users[user_id].get_current_stats()
 
     try:
         # Генерируем график
-        buffer = await generate_progress_charts(users[user_id])
+        buffer = await generate_progress_charts(stats)
         
         # Создаем объект для отправки графика
         photo = BufferedInputFile(
@@ -419,14 +442,81 @@ async def cmd_charts(message: Message):
             photo,
             caption=(
                 "📊 Ваш прогресс на сегодня:\n"
-                f"💧 Вода: {users[user_id].logged_water}/{users[user_id].water_goal} мл\n"
-                f"🔥 Калории: {users[user_id].logged_calories}/{users[user_id].calorie_goal} ккал\n"
-                f"💪 Сожжено: {users[user_id].burned_calories} ккал"
+                f"💧 Вода: {stats.logged_water}/{stats.water_goal} мл\n"
+                f"🔥 Калории: {stats.logged_calories}/{stats.calorie_goal} ккал\n"
+                f"💪 Сожжено: {stats.burned_calories} ккал"
             )
         )
     except Exception as e:
         print(f"Error generating charts: {e}")
         await message.answer("Извините, произошла ошибка при создании графиков.")
+
+@router.message(Command("history"))
+async def cmd_history(message: Message, state: FSMContext):
+    """Показывает историю активности пользователя"""
+    await state.set_state(HistoryPeriod.waiting_for_period)
+    await message.answer(
+        "За какой период показать историю?\n"
+        "1 - За сегодня\n"
+        "7 - За неделю\n"
+        "30 - За месяц\n"
+        "Введите число дней (от 1 до 30):"
+    )
+
+@router.message(HistoryPeriod.waiting_for_period)
+async def process_history_period(message: Message, state: FSMContext):
+    try:
+        days = int(message.text)
+        if not 1 <= days <= 30:
+            raise ValueError("Период должен быть от 1 до 30 дней")
+            
+        user_id = message.from_user.id
+        user = users[user_id]
+        
+        # Получаем историю за указанный период
+        start_date = datetime.now().date() - timedelta(days=days)
+        
+        # Формируем отчет
+        report = f"📊 История за последние {days} дней:\n\n"
+        
+        # Проходим по всем дням в диапазоне
+        for day_offset in range(days-1, -1, -1):
+            date = (datetime.now().date() - timedelta(days=day_offset)).isoformat()
+            if date in user.daily_stats:
+                stats = user.daily_stats[date]
+                day_str = datetime.fromisoformat(date).strftime("%d.%m")
+                
+                report += f"📅 {day_str}:\n"
+                report += f"💧 Вода: {stats.logged_water}/{stats.water_goal} мл\n"
+                report += f"🔥 Калории: {stats.logged_calories}/{stats.calorie_goal} ккал\n"
+                report += f"💪 Сожжено: {stats.burned_calories} ккал\n"
+                
+                if stats.food_log:
+                    report += "🍽 Питание:\n"
+                    for log in stats.food_log:
+                        time = datetime.fromisoformat(log['timestamp']).strftime("%H:%M")
+                        report += f"- {time}: {log['name']} ({log['weight']}г, {log['calories']:.1f} ккал)\n"
+                
+                if stats.workout_log:
+                    report += "🏃‍♂️ Тренировки:\n"
+                    for log in stats.workout_log:
+                        time = datetime.fromisoformat(log['timestamp']).strftime("%H:%M")
+                        report += f"- {time}: {log['type'].capitalize()} ({log['duration']} мин, {log['calories']} ккал)\n"
+                
+                report += "\n"
+        
+        if not user.daily_stats:
+            report += "Нет данных за указанный период"
+            
+        # Отправляем отчет
+        await message.answer(report)
+        await state.clear()
+        
+    except ValueError as e:
+        await message.answer(str(e))
+    except Exception as e:
+        await message.answer("Произошла ошибка при получении истории.")
+        logger.error(f"Error in history: {e}")
 
 # Запуск бота
 async def main():
