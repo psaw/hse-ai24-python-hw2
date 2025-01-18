@@ -18,9 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application
 COPY src/ ./src/
-RUN find ./src -type f -name "*.pyc" -delete && \
-    find ./src -type d -name "__pycache__" -delete && \
-    find ./src -type f -name ".*" -delete
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

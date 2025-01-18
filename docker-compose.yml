@@ -4,7 +4,7 @@ services:
     container_name: fitness-bot
     restart: unless-stopped
     volumes:
-      - ./src:/app/src
+      # - ./src:/app/src  # for local debugging
       - ./.env:/app/.env
     environment:
       - TZ=UTC
