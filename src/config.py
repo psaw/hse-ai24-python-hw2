@@ -2,10 +2,10 @@ import os
 import logging
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из .env файла
+# Load environment variables from .env file
 load_dotenv()
 
-# Токены и ключи API
+# API tokens and keys
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -14,30 +14,30 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 CONSUMER_KEY = os.getenv("CONSUMER_KEY")
 CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")
 
-# Настройка логирования
+# Logging setup
 logger = logging.getLogger('fitness_bot')
 logger.setLevel(LOG_LEVEL)
 
-# Создаем форматтер для логов
+# Create formatter for logs
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# Создаем обработчик для вывода в консоль
+# Create handler for console output
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# Проверяем наличие необходимых переменных
-if not all([BOT_TOKEN, WEATHER_API_KEY]):
-    logger.error("Отсутствуют необходимые переменные окружения")
-    raise ValueError("Отсутствуют необходимые переменные окружения")
+# Check for required environment variables
+if not all([BOT_TOKEN, WEATHER_API_KEY, CONSUMER_KEY, CONSUMER_SECRET]):
+    logger.error("Missing required environment variables")
+    raise ValueError("Missing required environment variables")
 
-# Константы для расчетов
-WATER_PER_KG = 30  # мл воды на кг веса
-WATER_PER_ACTIVITY = 500  # мл воды за каждые 30 минут базовой активности
-WATER_PER_WORKOUT = 200  # мл воды за каждые 30 минут тренировки
-WATER_HOT_WEATHER = 500  # дополнительная вода при жаркой погоде
+# Constants for calculations
+WATER_PER_KG = 30  # ml of water per kg of weight
+WATER_PER_ACTIVITY = 500  # ml of water per 30 minutes of base activity
+WATER_PER_WORKOUT = 200  # ml of water per 30 minutes of workout
+WATER_HOT_WEATHER = 500  # additional water in hot weather
 
-# Калории, сжигаемые за минуту различных активностей
+# Calories burned per minute for different activities
 WORKOUT_CALORIES = {
     "run": 10,
     "walk": 5,

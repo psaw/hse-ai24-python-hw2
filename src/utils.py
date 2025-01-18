@@ -10,8 +10,8 @@ from fatsecret import Fatsecret
 
 
 async def get_temperature(city: str, api_key: str) -> Optional[float]:
-    """Получает температуру для города через OpenWeatherMap API
-        Пример ответа для Moscow:
+    """Gets temperature for a city using OpenWeatherMap API
+        Example response for Moscow:
             {
                 "coord": {"lon": 37.6156, "lat": 55.7522},
                 "weather": [{
@@ -46,12 +46,12 @@ async def get_temperature(city: str, api_key: str) -> Optional[float]:
             if response.status == 200:
                 data = await response.json()
                 return data["main"]["temp"]
-            logger.error("Ошибка при получении температуры: {}".format(response.status))
+            logger.error("Error getting temperature: {}".format(response.status))
     return None
 
 
 async def get_food_info(product_name: str) -> Optional[Dict]:
-    """Получает информацию о продукте через OpenFoodFacts API"""
+    """Gets food information using OpenFoodFacts API"""
     url = f"https://world.openfoodfacts.org/cgi/search.pl"
     params = {
         "search_terms": product_name,
@@ -71,7 +71,7 @@ async def get_food_info(product_name: str) -> Optional[Dict]:
                         product = data["products"][0]
                         calories = product.get("nutriments", {}).get("energy-kcal_100g")
                         
-                        # Проверяем, что калории - это число и оно больше 0
+                        # Check if calories is a number and greater than 0
                         if calories and isinstance(calories, (int, float)) and calories > 0:
                             return {
                                 "name": product.get("product_name", product_name).strip() or product_name,
@@ -84,13 +84,13 @@ async def get_food_info(product_name: str) -> Optional[Dict]:
 
 async def get_food_info_from_fs(product_name: str) -> Optional[Dict]:
     """
-    Получает информацию о продукте через FatSecret API
+    Gets food information using FatSecret API
     Args:
-        product_name: название продукта
+        product_name: food name
     Returns:
-        Dict с информацией о продукте или None в случае ошибки
+        Dict with food information or None if error
 
-        Пример содержимого для coffee
+        Example content for coffee
         serving = 
         {
             'calcium': '5',
@@ -119,29 +119,29 @@ async def get_food_info_from_fs(product_name: str) -> Optional[Dict]:
         }
     """
     try:
-        # Инициализация клиента FatSecret
+        # Initialize FatSecret client
         fs = Fatsecret(CONSUMER_KEY, CONSUMER_SECRET)
 
-        # Поиск продукта. Только ПО-АНГЛИЙСКИЙ!
-        search_results = fs.foods_search(product_name) #, region="RU", language="ru") - только в платной версии
+        # Search for food. ENGLISH ONLY!
+        search_results = fs.foods_search(product_name) #, region="RU", language="ru") - only in paid version
 
         if not search_results:
-            logger.warning(f"Продукт не найден: {product_name}")
+            logger.warning(f"Food not found: {product_name}")
             return None
 
-        # Берем первый результат поиска
+        # Take first search result
         food_id = search_results[0]['food_id']
 
-        # Получаем детальную информацию о продукте
+        # Get detailed food information
         food_details = fs.food_get_v2(food_id)
 
         if not food_details or 'servings' not in food_details:
-            logger.warning(f"Нет информации о порциях для продукта: {product_name}")
+            logger.warning(f"No serving information for food: {product_name}")
             return None
 
-        # Получаем информацию о порциях
+        # Get serving information
         servings = food_details['servings']['serving']
-        # Ищем порцию на 100г
+        # Looking for 100g serving
         serving_100g = None
         if isinstance(servings, list):
             for s in servings:
@@ -150,76 +150,76 @@ async def get_food_info_from_fs(product_name: str) -> Optional[Dict]:
                     serving_100g = s
                     break
         
-        # Если нашли порцию на 100г, используем её
+        # If found 100g serving, use it
         if serving_100g:
             serving = serving_100g
             factor = 1
-        else:  # иначе берем первую порцию
+        else:  # otherwise take first serving
             serving = servings[0] if isinstance(servings, list) else servings
-            # Если порция в унциях, переводим в граммы (1 oz = 28.35 г)
+            # If serving is in ounces, convert to grams (1 oz = 28.35 g)
             if serving.get('metric_serving_unit') == 'oz':
                 metric_amount = float(serving.get('metric_serving_amount', 0)) * 28.35
-                serving['metric_serving_unit'] = 'г'
+                serving['metric_serving_unit'] = 'g'
             else:
                 metric_amount = float(serving.get('metric_serving_amount', 100))
-            # Если порция не на 100г, будем приводить к 100г
+            # If serving is not 100g, convert to 100g
             factor = 100 / metric_amount
 
-        # Формируем результат для 100г
+        # Format result for 100g
         return {
             "name": food_details.get('food_name', product_name),
-            "calories": round(float(serving.get('calories', 0))*factor),  # ккал на 100г, округляем до целого
-            "protein": round(float(serving.get('protein', 0))*factor, 1),  # белки на 100г, .. до 1 знака
-            "fat": round(float(serving.get('fat', 0))*factor, 1),  # жиры на 100г, .. до 1 знака
-            "carbohydrate": round(float(serving.get('carbohydrate', 0))*factor, 1),  # углеводы на 100г, .. до 1 знака
-            "metric_serving_unit": serving.get('metric_serving_unit', 'г'),  # единица измерения
+            "calories": round(float(serving.get('calories', 0))*factor),  # kcal per 100g, round to integer
+            "protein": round(float(serving.get('protein', 0))*factor, 1),  # protein per 100g, round to 1 decimal
+            "fat": round(float(serving.get('fat', 0))*factor, 1),  # fat per 100g, round to 1 decimal
+            "carbohydrate": round(float(serving.get('carbohydrate', 0))*factor, 1),  # carbs per 100g, round to 1 decimal
+            "metric_serving_unit": serving.get('metric_serving_unit', 'g'),  # measurement unit
         }
     except KeyError as e:
-        logger.error("Ошибка при получении информации о продукте '{}' : {}".format(product_name, str(e)))
-        return {"error": str(e), "name": product_name, "suggest": "Используйте только английские названия продуктов"}
+        logger.error("Error getting food information '{}' : {}".format(product_name, str(e)))
+        return {"error": str(e), "name": product_name, "suggest": "Please use English food names only"}
     except Exception as e:
-        logger.error("Ошибка при получении информации о продукте '{}' : {}".format(product_name, str(e)))
+        logger.error("Error getting food information '{}' : {}".format(product_name, str(e)))
         return {"error": str(e), "name": product_name}
 
 
 async def generate_progress_charts(stats: DailyStats) -> io.BytesIO:
-    """Генерирует графики прогресса по воде и калориям"""
-    # Создаем фигуру с двумя подграфиками
+    """Generates progress charts for water and calories"""
+    # Create figure with two subplots
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
     fig.patch.set_facecolor('#F0F2F6')
     
-    # Цвета для графиков
+    # Colors for charts
     colors = ['#2E86C1', '#3498DB']
     
-    # График воды
+    # Water chart
     water_data = [stats.logged_water, stats.water_goal]
-    water_labels = ['Выпито', 'Цель']
+    water_labels = ['Consumed', 'Goal']
     bars1 = ax1.bar(water_labels, water_data, color=colors)
-    ax1.set_title('Прогресс по воде', pad=20, fontsize=14)
-    ax1.set_ylabel('Миллилитры (мл)')
+    ax1.set_title('Water Progress', pad=20, fontsize=14)
+    ax1.set_ylabel('Milliliters (ml)')
     
-    # Добавляем значения над столбцами
+    # Add values above bars
     for bar in bars1:
         height = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)} мл',
+                f'{int(height)} ml',
                 ha='center', va='bottom')
     
-    # График калорий
+    # Calories chart
     calorie_data = [stats.logged_calories, stats.burned_calories, stats.calorie_goal]
-    calorie_labels = ['Потреблено', 'Сожжено', 'Цель']
+    calorie_labels = ['Consumed', 'Burned', 'BMR']
     bars2 = ax2.bar(calorie_labels, calorie_data, color=colors + ['#2ECC71'])
-    ax2.set_title('Прогресс по калориям', pad=20, fontsize=14)
-    ax2.set_ylabel('Калории (ккал)')
+    ax2.set_title('Calorie Progress', pad=20, fontsize=14)
+    ax2.set_ylabel('Calories (kcal)')
     
-    # Добавляем значения над столбцами
+    # Add values above bars
     for bar in bars2:
         height = bar.get_height()
         ax2.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)} ккал',
+                f'{int(height)} kcal',
                 ha='center', va='bottom')
     
-    # Стилизация графиков
+    # Style charts
     for ax in [ax1, ax2]:
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -228,7 +228,7 @@ async def generate_progress_charts(stats: DailyStats) -> io.BytesIO:
     
     plt.tight_layout()
     
-    # Сохраняем график в буфер
+    # Save chart to buffer
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
     buf.seek(0)

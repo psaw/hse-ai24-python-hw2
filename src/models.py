@@ -29,35 +29,35 @@ class UserProfile:
         """Gets or creates stats for current day"""
         today = datetime.now().date().isoformat()
         if today not in self.daily_stats:
-            # Создаем новые статистики для дня
+            # Create new stats for the day
             self.daily_stats[today] = DailyStats(date=today)
-            # Инициализируем цели для нового дня
-            from utils import get_temperature  # Импорт здесь во избежание циклических зависимостей
+            # Initialize goals for new day
+            from utils import get_temperature  # Import here to avoid circular dependencies
             from config import WEATHER_API_KEY
             
             temp = await get_temperature(self.city, WEATHER_API_KEY)
             if temp is not None:
                 await self.update_daily_goals(temp)
             else:
-                # Если не удалось получить температуру, используем базовые цели
+                # If failed to get temperature, use base goals
                 stats = self.daily_stats[today]
-                stats.water_goal = self.calculate_water_goal(20)  # Используем 20°C как базовую температуру
+                stats.water_goal = self.calculate_water_goal(20)  # Use 20°C as base temperature
                 stats.calorie_goal = self.calculate_calorie_goal()
                 stats.temperature = 20
         
         return self.daily_stats[today]
     
     def calculate_water_goal(self, temperature: float) -> float:
-        """Рассчитывает дневную норму воды в мл"""
-        base = self.weight * WATER_PER_KG  # базовая норма
-        activity = (self.activity_minutes // 30) * WATER_PER_ACTIVITY  # +500мл каждые 30 минут активности
-        temp_addition = WATER_HOT_WEATHER if temperature > 25 else 0  # +500мл при жаркой погоде
+        """Calculates daily water norm in ml"""
+        base = self.weight * WATER_PER_KG  # base norm
+        activity = (self.activity_minutes // 30) * WATER_PER_ACTIVITY  # +500ml every 30 minutes of activity
+        temp_addition = WATER_HOT_WEATHER if temperature > 25 else 0  # +500ml in hot weather
         return base + activity + temp_addition
 
     def calculate_calorie_goal(self) -> float:
-        """Рассчитывает дневную норму калорий"""
+        """Calculates daily calorie norm"""
         bmr = 10 * self.weight + 6.25 * self.height - 5 * self.age
-        activity_calories = self.activity_minutes * 4  # примерно 4 калории в минуту
+        activity_calories = self.activity_minutes * 4  # approximately 4 calories per minute
         return bmr + activity_calories
 
     async def update_daily_goals(self, temperature: float):
