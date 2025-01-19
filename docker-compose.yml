@@ -1,7 +1,7 @@
 services:
   bot:
-    build: .
-    container_name: fitness-bot
+    # build: .
+    image: cr.yandex/crpall4s9kealqjfj133/fitness-bot
     restart: unless-stopped
     volumes:
       # - ./src:/app/src  # for local debugging
