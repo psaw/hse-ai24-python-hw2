@@ -2,175 +2,156 @@
 
 A Telegram bot for health and fitness tracking, helping users monitor their water intake, calories, and physical activity.
 
+## Demo
+
+YouTube: https://youtu.be/H2nxUPJyS18
+
 ## Key Features
 
-- 💧 Water intake tracking
-- 🍎 Calorie counting
+- 💧 Water intake tracking with smart recommendations based on:
+  - User's weight
+  - Activity level
+  - Weather conditions
+- 🍎 Calorie counting with:
+  - Food logging
+  - BMR calculation
+  - Activity-based adjustments
 - 🏃‍♂️ Exercise logging
 - 📊 Progress visualization
-- 🌡️ Weather conditions consideration for water intake calculation
+- 🌡️ Weather integration for smart water intake recommendations
 
 ## Technologies
 
-- Python 3.8+
+- Python 3.12+
 - aiogram 3.x (asynchronous framework for Telegram bots)
 - aiohttp (for asynchronous HTTP requests)
 - matplotlib (graph generation)
 - python-dotenv (environment variables management)
 - FatSecret API (food information)
+- OpenWeatherMap API (weather data)
+- Docker & Docker Compose (containerization)
 
 ## Project Structure
 
 ```
-src/
-├── bot.py # Main bot logic
-├── config.py # Configuration and constants
-├── models.py # Data models
-└── utils.py # Helper functions
+.
+├── src/
+│   ├── bot.py      # Main bot logic and handlers
+│   ├── config.py   # Configuration and constants
+│   ├── models.py   # Data models (UserProfile, DailyStats)
+│   └── utils.py    # Helper functions
+├── .env            # Environment variables
+├── .dockerignore
+├── docker-compose.yml          # Local deployment
+├── docker-compose.cloud.yml    # Cloud deployment
+├── Dockerfile
+├── deploy.sh       # Yandex.Cloud deployment script
+└── README.md
 ```
 
 ## Architecture
 
+### Data Models (models.py)
+
+- **UserProfile**: Stores user information and preferences
+  - Basic info (weight, height, age)
+  - Activity level
+  - Location for weather data
+  - Daily statistics tracking
+
+- **DailyStats**: Tracks daily progress
+  - Water intake
+  - Calorie intake and burning
+  - Food and workout logs
+  - Daily goals based on user profile and conditions
+
 ### Configuration (config.py)
 
-The module is responsible for:
-- Loading environment variables from `.env` file
-- Setting up logging
-- Defining calculation constants
-- Verifying required API keys
+- Environment variables management
+- Logging setup
+- Calculation constants
+- API keys verification
 
-### Middleware
+### State Management
 
-The bot uses two middleware components:
-
-1. **LoggingMiddleware** - for logging all messages
-2. **CheckUserProfileMiddleware** - checks for user profile existence
-
-### Finite State Machine (FSM)
-
-Used to manage dialogues in two main scenarios:
-- User profile setup (ProfileSetup)
-- Food logging (FoodLogging)
+The bot uses Finite State Machine (FSM) for managing:
+- User profile setup flow
+- Food logging process
+- Workout logging
 
 ### Main Commands
 
-- `/start` - start working with the bot
-- `/set_profile` - configure profile
-- `/log_water` - record water intake
-- `/log_food` - record food intake
-- `/log_workout` - record workout
-- `/check_progress` - check progress
-- `/charts` - show progress charts
+- `/start` - Initialize bot interaction
+- `/set_profile` - Configure user profile
+- `/log_water` - Record water intake
+- `/log_food` - Log food consumption
+- `/log_workout` - Record exercise
+- `/check_progress` - View current progress
+- `/charts` - Generate progress visualizations
+- `/history` - View past logs
 
-## Implementation Details
+## Deployment Options
 
-### Asynchronous Programming
+### Local Deployment
 
-The bot is built on asynchronous programming (async/await), which provides:
-- Processing multiple requests simultaneously
-- Efficient work with external APIs
-- No blocking of the main thread
-
-### Error Handling
-
-An extensive error handling system is implemented through try/except blocks for:
-- User input validation
-- External API error handling
-- Protection against incorrect data
-
-### Data Visualization
-
-The bot generates progress charts using matplotlib:
-- Water intake chart
-- Calorie chart (consumption/burning)
-
-### Data Storage
-
-In the current version, data is stored in memory (users dictionary). For production, it's recommended to use a database.
-
-## Installation and Setup
-
-1. Clone the repository:
-```sh
-git clone [repository URL]
-```
-
-2. Install dependencies:
-```sh
-pip install -r requirements.txt
-```
-
-3. Create a `.env` file and add the necessary environment variables:
+1. Clone the repository
+2. Create `.env` file with required variables:
 ```env
 BOT_TOKEN=your_telegram_bot_token
 WEATHER_API_KEY=your_weather_api_key
 CONSUMER_KEY=your_fatsecret_consumer_key
 CONSUMER_SECRET=your_fatsecret_consumer_secret
+LOG_LEVEL=DEBUG
 ```
 
-4. Start the bot:
-```sh
-python src/bot.py
+3. Run with Docker Compose:
+```bash
+docker-compose up --build .
 ```
+
+### Cloud Deployment (Yandex.Cloud)
+
+The project includes automated deployment to Yandex.Cloud:
+
+1. Configure cloud environment variables in `.docker-compose.cloud.yml`
+
+2. Use deployment script:
+```bash
+# Deploy or update
+./deploy.sh
+
+# Stop instance
+./deploy.sh --stop
+
+# Reset and redeploy
+./deploy.sh --reset
+```
+
+#### Cloud Infrastructure
+
+- Platform: Yandex.Cloud
+- Container Registry (private): cr.yandex
+- VM Configuration:
+  - Platform: standard-v3
+  - CPU: 2 cores
+  - RAM: 4GB
+  - Storage: 30GB
+  - Region: ru-central1-a
+
+## Error Handling
+
+- Comprehensive error handling for API interactions
+- Graceful degradation for weather service failures
+- Input validation and sanitization
+- Logging for debugging and monitoring
+
+## Data Storage
+
+Currently uses in-memory storage with the following structure:
+- User profiles stored in memory dictionary
+- Daily statistics tracked per user
+- Persistent storage planned for production use
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file
-
-
-# Deployment
-
-1. Make sure all files are in the correct structure:
-```sh
-.
-├── src/
-│ ├── bot.py
-│ ├── config.py
-│ ├── models.py
-│ └── utils.py
-├── .env
-├── .dockerignore
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── README.md
-```
-
-2. Create your `.env` file with the required environment variables:
-```env
-BOT_TOKEN=your_telegram_bot_token
-WEATHER_API_KEY=your_weather_api_key
-CONSUMER_KEY=your_fatsecret_consumer_key
-CONSUMER_SECRET=your_fatsecret_consumer_secret
-LOG_LEVEL=INFO
-```
-
-## Docker Deployment
-
-### Running with Docker Compose:
-1. Build and run with Docker Compose:
-```bash
-docker-compose up --build -d
-```
-
-2. View logs:
-```bash
-docker-compose logs -f
-```
-
-3. Stop the bot:
-```bash
-docker-compose down
-```
-
-### Running without Docker Compose:
-
-1. Build the image:
-```bash
-docker build -t fitness-bot .
-```
-
-2. Run the container:
-```bash
-docker run -d --name fitness_bot --restart unless-stopped fitness-bot
-```
