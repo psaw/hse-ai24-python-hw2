@@ -1,108 +1,106 @@
-# Фитнес-бот для Telegram
+# Fitness Bot for Telegram
 
-Telegram-бот для отслеживания здоровья и фитнеса, помогающий пользователям следить за потреблением воды, калорий и физической активностью.
+A Telegram bot for health and fitness tracking, helping users monitor their water intake, calories, and physical activity.
 
-## Основные возможности
+## Key Features
 
-- 💧 Отслеживание потребления воды
-- 🍎 Подсчет калорий
-- 🏃‍♂️ Запись физических упражнений
-- 📊 Визуализация прогресса
-- 🌡️ Учет погодных условий при расчете нормы воды
+- 💧 Water intake tracking
+- 🍎 Calorie counting
+- 🏃‍♂️ Exercise logging
+- 📊 Progress visualization
+- 🌡️ Weather conditions consideration for water intake calculation
 
-## Технологии
+## Technologies
 
 - Python 3.8+
-- aiogram 3.x (асинхронный фреймворк для Telegram ботов)
-- aiohttp (для асинхронных HTTP-запросов)
-- matplotlib (генерация графиков)
-- python-dotenv (управление переменными окружения)
-- FatSecret API (информация о продуктах питания)
+- aiogram 3.x (asynchronous framework for Telegram bots)
+- aiohttp (for asynchronous HTTP requests)
+- matplotlib (graph generation)
+- python-dotenv (environment variables management)
+- FatSecret API (food information)
 
-## Структура проекта
+## Project Structure
 
 ```
 src/
-├── bot.py # Основная логика бота
-├── config.py # Конфигурация и константы
-├── models.py # Модели данных
-└── utils.py # Вспомогательные функции
+├── bot.py # Main bot logic
+├── config.py # Configuration and constants
+├── models.py # Data models
+└── utils.py # Helper functions
 ```
 
+## Architecture
 
-## Архитектура
+### Configuration (config.py)
 
-### Конфигурация (config.py)
-
-Модуль отвечает за:
-- Загрузку переменных окружения из `.env` файла
-- Настройку логирования
-- Определение констант для расчетов
-- Проверку наличия необходимых API ключей
+The module is responsible for:
+- Loading environment variables from `.env` file
+- Setting up logging
+- Defining calculation constants
+- Verifying required API keys
 
 ### Middleware
 
-Бот использует два middleware:
+The bot uses two middleware components:
 
-1. **LoggingMiddleware** - для логирования всех сообщений
-2. **CheckUserProfileMiddleware** - проверяет наличие профиля пользователя
+1. **LoggingMiddleware** - for logging all messages
+2. **CheckUserProfileMiddleware** - checks for user profile existence
 
-### Конечный автомат (FSM)
+### Finite State Machine (FSM)
 
-Используется для управления диалогами в двух основных сценариях:
-- Настройка профиля пользователя (ProfileSetup)
-- Логирование приема пищи (FoodLogging)
+Used to manage dialogues in two main scenarios:
+- User profile setup (ProfileSetup)
+- Food logging (FoodLogging)
 
-### Основные команды
+### Main Commands
 
-- `/start` - начало работы
-- `/set_profile` - настройка профиля
-- `/log_water` - запись потребления воды
-- `/log_food` - запись приема пищи
-- `/log_workout` - запись тренировки
-- `/check_progress` - проверка прогресса
-- `/charts` - показ графиков прогресса
+- `/start` - start working with the bot
+- `/set_profile` - configure profile
+- `/log_water` - record water intake
+- `/log_food` - record food intake
+- `/log_workout` - record workout
+- `/check_progress` - check progress
+- `/charts` - show progress charts
 
-## Особенности реализации
+## Implementation Details
 
-### Асинхронное программирование
+### Asynchronous Programming
 
-Бот построен на асинхронном программировании (async/await), что обеспечивает:
-- Обработку множества запросов одновременно
-- Эффективную работу с внешними API
-- Отсутствие блокировки основного потока
+The bot is built on asynchronous programming (async/await), which provides:
+- Processing multiple requests simultaneously
+- Efficient work with external APIs
+- No blocking of the main thread
 
-### Обработка ошибок
+### Error Handling
 
-Реализована обширная система обработки ошибок через try/except блоки для:
-- Валидации пользовательского ввода
-- Обработки ошибок внешних API
-- Защиты от некорректных данных
+An extensive error handling system is implemented through try/except blocks for:
+- User input validation
+- External API error handling
+- Protection against incorrect data
 
-### Визуализация данных
+### Data Visualization
 
-Бот генерирует графики прогресса с помощью matplotlib:
-- График потребления воды
-- График калорий (потребление/сжигание)
+The bot generates progress charts using matplotlib:
+- Water intake chart
+- Calorie chart (consumption/burning)
 
-### Хранение данных
+### Data Storage
 
-В текущей версии данные хранятся в памяти (словарь users). В продакшн-версии рекомендуется использовать базу данных.
+In the current version, data is stored in memory (users dictionary). For production, it's recommended to use a database.
 
-## Установка и запуск
+## Installation and Setup
 
-1. Клонируйте репозиторий:
+1. Clone the repository:
 ```sh
-bash
-git clone [URL репозитория]
+git clone [repository URL]
 ```
 
-2. Установите зависимости:
-```bash
+2. Install dependencies:
+```sh
 pip install -r requirements.txt
 ```
 
-3. Создайте файл `.env` и добавьте необходимые переменные окружения:
+3. Create a `.env` file and add the necessary environment variables:
 ```env
 BOT_TOKEN=your_telegram_bot_token
 WEATHER_API_KEY=your_weather_api_key
@@ -110,14 +108,14 @@ CONSUMER_KEY=your_fatsecret_consumer_key
 CONSUMER_SECRET=your_fatsecret_consumer_secret
 ```
 
-4. Запустите бота:
-```bash
+4. Start the bot:
+```sh
 python src/bot.py
 ```
 
-## Лицензия
+## License
 
-MIT License - см. файл [LICENSE](LICENSE)
+MIT License - see [LICENSE](LICENSE) file
 
 
 # Deployment
