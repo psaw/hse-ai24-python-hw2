@@ -1,0 +1,14 @@
+services:
+  bot:
+    image: cr.yandex/crpall4s9kealqjfj133/fitness-bot
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+      - LOG_LEVEL=DEBUG
+      # Telegram
+      - BOT_TOKEN=[...]
+      # OpenWeatherMap
+      - WEATHER_API_KEY=[...]
+      # FatSecret OAuth 1.0
+      - CONSUMER_KEY=[...]
+      - CONSUMER_SECRET=[...]
